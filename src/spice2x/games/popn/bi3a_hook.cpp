@@ -387,15 +387,6 @@ namespace games::popn {
         return 0;
     }
 
-    struct PopnLight {
-        int data_index;
-        Lights::popn_lights_t light;
-        uint8_t size;
-        PopnLight(
-            int data_index, Lights::popn_lights_t light, uint8_t size) :
-                data_index(data_index), light(light), size(size) {}
-    };
-
     static void __fastcall aioIob5Bi3a_SetTapeLedDataPart(
         AIO_IOB5_BI3A *i_pNodeCtl, uint32_t i_CnPin, char i_LedType, const void *i_pData, uint32_t i_DataSize, bool i_bIsLast) {
 
