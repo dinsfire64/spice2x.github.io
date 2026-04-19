@@ -19,11 +19,13 @@
 #include "util/sysutils.h"
 #include "io.h"
 #include "util/deferlog.h"
+#include "misc/nativetouchhook.h"
 #include "misc/wintouchemu.h"
 
 namespace games::popn {
 
     bool SHOW_PIKA_MONITOR_WARNING = false;
+    bool NATIVE_TOUCH = false;
     
 #if SPICE64 && !SPICE_XP
 
@@ -36,38 +38,82 @@ namespace games::popn {
     // pin 1 = left pop (red pop kun), size 16, values 0-0xFF
     // pin 2 = right pop (blue pop kun), size 16, values 0-0xFF
     // pin 3 = title, size 44, values 0-0xFF
-    // pin 4 = speaker, size 40, values 0-0xFF - U region only
+    // pin 4 = speaker, size 40, values 0-0x7F - U region only
     // pin 5 = monitor, size 18, values 0-0x7F - U region only
     // pin 6 = control panel, size 28, values 0-0x7F - U region only
     // pin 7 = cabinet, size 22, values 0-0x7F - U region only
     tapeledutils::tape_led TAPELED_MAPPING[POPN_TAPELED_TOTAL] = {
         {
-            0, // these are button lights and handled specially
+            // [0] button lights: these are button lights and handled specially
+            0, 
+            0,
             0,
             0,
             0,
             "Invalid"
         },
         {
+            // [1] red pop-kun
             5, // 5*3; game reports 16 but make it 15
             Lights::popn_lights_t::RedPopKun_R,
             Lights::popn_lights_t::RedPopKun_G,
             Lights::popn_lights_t::RedPopKun_B,
+            0xFF,
             "Red Pop-Kun"
         },
         {
+            // [2] blue pop-kun
             5, // 5*3; game reports 16 but make it 15
             Lights::popn_lights_t::BluePopKun_R,
             Lights::popn_lights_t::BluePopKun_G,
             Lights::popn_lights_t::BluePopKun_B,
+            0xFF,
             "Blue Pop-Kun"
         },
         {
-            14, // 14*3; game reports 44 but make it 42; these are lights above the banner
+            // [3] top LED
+            14, // 14*3; game reports 44 but make it 42
             Lights::popn_lights_t::TopLED_R,
             Lights::popn_lights_t::TopLED_G,
             Lights::popn_lights_t::TopLED_B,
+            0xFF,
             "Top"
+        },
+        {
+            // [4] speakers
+            13, // 13*3; game reports 40 but make it 39
+            Lights::popn_lights_t::Speaker_G,
+            Lights::popn_lights_t::Speaker_R,
+            Lights::popn_lights_t::Speaker_B,
+            0x7F,
+            "Speakers"
+        },
+        {
+            // [5] monitor
+            6,
+            Lights::popn_lights_t::Monitor_G,
+            Lights::popn_lights_t::Monitor_R,
+            Lights::popn_lights_t::Monitor_B,
+            0x7F,
+            "Monitor"
+        },
+        {
+            // [6] control panel
+            9, // 9*3; game reports 28
+            Lights::popn_lights_t::ControlPanel_G,
+            Lights::popn_lights_t::ControlPanel_R,
+            Lights::popn_lights_t::ControlPanel_B,
+            0x7F,
+            "Control Panel"
+        },
+        {
+            // [7] Cabinet
+            7, // 7*3; game reports 22
+            Lights::popn_lights_t::Cabinet_G,
+            Lights::popn_lights_t::Cabinet_R,
+            Lights::popn_lights_t::Cabinet_B,
+            0x7F,
+            "Cabinet"
         },
     };
 
@@ -670,9 +716,13 @@ namespace games::popn {
         //       set third column to 0 and it will work with BIO2
         
         if (!GRAPHICS_WINDOWED) {
-            wintouchemu::FORCE = true;
-            wintouchemu::INJECT_MOUSE_AS_WM_TOUCH = true;
-            wintouchemu::hook_title_ends("", "Main Screen", avs::game::DLL_INSTANCE);
+            if (NATIVE_TOUCH) {
+                nativetouchhook::hook(avs::game::DLL_INSTANCE);
+            } else {
+                wintouchemu::FORCE = true;
+                wintouchemu::INJECT_MOUSE_AS_WM_TOUCH = true;
+                wintouchemu::hook_title_ends("", "Main Screen", avs::game::DLL_INSTANCE);
+            }
         }
 
         sysutils::hook_EnumDisplayDevicesA();

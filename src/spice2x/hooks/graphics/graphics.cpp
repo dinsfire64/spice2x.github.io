@@ -476,6 +476,14 @@ static HWND WINAPI CreateWindowExW_hook(DWORD dwExStyle, LPCWSTR lpClassName, LP
         }
     }
 
+    // FTT
+    if (avs::game::is_model("MMD")) {
+        // set window name
+        if (!lpWindowName) {
+            lpWindowName = L"Future TomTom";
+        }
+    }
+
     if (GRAPHICS_WINDOWED) {
         graphics_window_check_bounds_before_creation(x, y, nWidth, nHeight);
     }
@@ -923,6 +931,9 @@ void graphics_hook_subscreen_window(HWND hWnd) {
     }
     if (GRAPHICS_WSUB_ALWAYS_ON_TOP) {
         graphics_update_z_order(hWnd, true);
+    }
+    if (GRAPHICS_WINDOW_DISABLE_ROUNDED_CORNERS) {
+        graphics_set_corner_preference(hWnd, true);
     }
 }
 

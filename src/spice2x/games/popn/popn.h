@@ -17,11 +17,12 @@ namespace games::popn {
     }
 
 #if SPICE64
-    constexpr int POPN_TAPELED_TOTAL = 4;
+    constexpr int POPN_TAPELED_TOTAL = 8;
     extern tapeledutils::tape_led TAPELED_MAPPING[POPN_TAPELED_TOTAL];
 #endif
 
     extern bool SHOW_PIKA_MONITOR_WARNING;
+    extern bool NATIVE_TOUCH;
 
     class POPNGame : public games::Game {
     public:

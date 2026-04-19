@@ -597,6 +597,9 @@ int main_implementation(int argc, char *argv[]) {
     if (options[launcher::Options::PopnSubMonitorOverride].is_active()) {
         sysutils::SECOND_MONITOR_OVERRIDE = options[launcher::Options::PopnSubMonitorOverride].value_text();
     }
+    if (options[launcher::Options::PopnNativeTouch].value_bool()) {
+        games::popn::NATIVE_TOUCH = true;
+    }
     if (options[launcher::Options::LoadMetalGearArcadeModule].value_bool()) {
         attach_mga = true;
     }
@@ -1117,6 +1120,7 @@ int main_implementation(int argc, char *argv[]) {
     }
     GRAPHICS_WINDOW_ALWAYS_ON_TOP = options[launcher::Options::spice2x_WindowAlwaysOnTop].value_bool();
     GRAPHICS_WINDOW_BACKBUFFER_SCALE = options[launcher::Options::WindowForceScaling].value_bool();
+    GRAPHICS_WINDOW_DISABLE_ROUNDED_CORNERS = options[launcher::Options::WindowDisableRoundedCorners].value_bool();
 
     // IIDX/SDVX Windowed Subscreen
     if (options[launcher::Options::spice2x_IIDXWindowedSubscreenSize].is_active()) {
@@ -1831,9 +1835,7 @@ int main_implementation(int argc, char *argv[]) {
                 attach_ftt = true;
 
                 // the game is windowed by default unless we set the env
-                if (GRAPHICS_WINDOWED) {
-                    GRAPHICS_WINDOWED = false;
-                } else {
+                if (!GRAPHICS_WINDOWED) {
                     SetEnvironmentVariable("DAMAC_VIEWER_FULLSCREEN", "0");
                 }
 
