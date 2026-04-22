@@ -605,16 +605,6 @@ void rawinput::RawInputManager::devices_scan_rawinput(RAWINPUTDEVICELIST *device
                     value_caps.LogicalMax = 255;
                 }
 
-                // fix min and max values
-                if (value_caps.BitSize > 0 && value_caps.BitSize <= sizeof(value_caps.LogicalMin) * 8) {
-                    auto shift_size = sizeof(value_caps.LogicalMin) * 8 - value_caps.BitSize + 1;
-                    auto mask = ((uint64_t) 1 << value_caps.BitSize) - 1;
-                    value_caps.LogicalMin &= mask;
-                    value_caps.LogicalMin <<= shift_size;
-                    value_caps.LogicalMin >>= shift_size;
-                    value_caps.LogicalMax &= mask;
-                }
-
                 // fix up hat switch to initially report as neutral position
                 if (value_caps.UsagePage == 0x1 && value_caps.Range.UsageMin == 0x39) {
                     value_states[value_cap_num] = -1.f;
@@ -1914,15 +1904,6 @@ LRESULT CALLBACK rawinput::RawInputManager::input_wnd_proc(
                             LONG value_min = value_caps.LogicalMin;
                             LONG value_max = value_caps.LogicalMax;
 
-                            // fix sign bits for signed values
-                            if (value_caps.LogicalMin < 0 &&
-                                    value_caps.BitSize > 0 &&
-                                    value_caps.BitSize <= sizeof(value_caps.LogicalMin) * 8) {
-                                auto shift_size = sizeof(value_caps.LogicalMin) * 8 - value_caps.BitSize + 1;
-                                value_raw <<= shift_size;
-                                value_raw >>= shift_size;
-                            }
-
                             float value;
                             // 0x1 == generic desktop, 0x39 == hat switch
                             if (value_caps.UsagePage == 0x1 && value_caps.Range.UsageMin == 0x39) {
@@ -1935,6 +1916,16 @@ LRESULT CALLBACK rawinput::RawInputManager::input_wnd_proc(
                                     value = -1.f;
                                 }
                             } else {
+
+                                // fix sign bits for signed values
+                                if (value_caps.LogicalMin < 0 &&
+                                    0 < value_caps.BitSize && value_caps.BitSize < 32) {
+
+                                    ULONG raw = static_cast<ULONG>(value_raw) & ((1u << value_caps.BitSize) - 1u);
+                                    const ULONG sign_bit = 1u << (value_caps.BitSize - 1);
+                                    value_raw = static_cast<LONG>((raw ^ sign_bit) - sign_bit);
+                                }
+
                                 // automatic calibration
                                 if (value_raw < value_min) {
                                     value_caps.LogicalMin = value_raw;
