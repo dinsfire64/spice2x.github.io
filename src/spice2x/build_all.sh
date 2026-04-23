@@ -163,6 +163,7 @@ time (
 	if ((BUILD_XP > 0))
 	then
 		# 32 bit Windows XP
+		echo ""
 		echo "Building 32bit targets (WinXP toolchain)..."
 		echo "========================="
 		if ((CLEAN_BUILD > 0))
@@ -187,6 +188,7 @@ time (
 		CXXFLAGS="$CXXFLAGS -DSPICE_XP=1" cmake -G "Ninja" -DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_WINXP_64} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} "$OLDPWD" && ninja ${TARGETS_XP64}
 		popd > /dev/null
 	else
+		echo ""
 		echo "Skipping WinXP builds, toolchain not specified"
 	fi
 
