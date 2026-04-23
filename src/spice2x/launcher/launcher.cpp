@@ -2364,9 +2364,9 @@ int main_implementation(int argc, char *argv[]) {
     // layeredfs
     if (fileutils::dir_exists("data_mods") &&
         GetModuleHandleA("ifs_hook.dll") == nullptr) {
-        log_warning("launcher", "data_mods directory found, but ifs_hook.dll is not present; mods will not load");
+        log_warning("launcher", "data_mods directory found, but ifs_hook.dll is not loaded; mods will not load");
         deferredlogs::defer_error_messages({
-            "data_mods directory was found, but ifs_hook.dll is not present",
+            "data_mods directory was found, but ifs_hook.dll is not loaded",
             "    your mods will not load",
             "    to fix this, download ifs_layeredfs and add it as a DLL hook (-k)",
             "    https://github.com/mon/ifs_layeredfs"
