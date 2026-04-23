@@ -1697,6 +1697,9 @@ namespace overlay::windows {
                         button->setDeviceIdentifier(device.name);
                         // reset controls when switching devices
                         button->setAnalogType(ButtonAnalogType::BAT_NONE);
+                        button->setDebounceUp(0.0);
+                        button->setDebounceDown(0.0);
+                        button->setBatThreshold(0);
                         button->setVelocityThreshold(0);
                         button->setVKey(0);
                         button->setInvert(false);
