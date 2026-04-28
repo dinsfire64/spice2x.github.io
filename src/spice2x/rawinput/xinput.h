@@ -31,6 +31,8 @@ namespace xinput {
         float sThumbRY;
     };
 
+    // the order of this enum is used for vkey mapping (saved in config file)
+    // therefore it can never be changed
     enum class XInputButtonEnum : uint16_t {
         // actual buttons
         DPAD_UP,
@@ -102,7 +104,7 @@ namespace xinput {
         ~XInputManager();
         void stop();
         std::vector<uint8_t> get_available_players();
-        bool is_button_pressed(uint8_t player, XInputButtonEnum button);
+        bool is_button_pressed(uint8_t player, XInputButtonEnum button, XINPUT_GAMEPAD_STATE_NORMALIZED *state_in=nullptr);
         float get_analog_state(uint8_t player, XInputAnalogEnum analog);
         bool get_any_button_pressed(XINPUT_NEW_BUTTON &button);
         void set_output_state(uint8_t player, XInputOutputEnum output, float value);

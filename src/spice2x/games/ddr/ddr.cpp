@@ -291,4 +291,50 @@ namespace games::ddr {
         // dispose device hook
         devicehook_dispose();
     }
+
+    static void get_analog_xy_axis(Analog &analog, bool &less, bool &more) {
+        if (!analog.isSet()) {
+            return;
+        }
+        const auto value = GameAPI::Analogs::getState(RI_MGR, analog);
+
+        // stepmania linux source:
+        // https://github.com/stepmania/stepmania/blob/d55acb1ba26f1c5b5e3048d6d6c0bd116625216f/src/arch/InputHandler/InputHandler_Linux_Event.cpp#L410
+
+        // for example, value cap with range [0, 255]:
+        // 127 = 0.498, neutral
+        // 128 = 0.502, both
+        // apparently some adapters report values like above; this obviously makes a lot of
+        // assumptions about bit width of the HID value cap and how the adapter reports
+        // neutral/both values, but this is good enough for parity with stepmania and its many forks
+        if (0.5001f < value && value < 0.75f) {
+            less |= true;
+            more |= true;
+
+        } else if (value <= 0.25f) {
+            less |= true;
+        } else if (value >= 0.75f) {
+            more |= true;
+        }
+    }
+
+    void get_analog_x_axis(int player, bool &left, bool &right) {
+        if (player != 1 && player != 2) {
+            log_fatal("ddr", "invalid player number: {}, expected 1 or 2", player);
+            return;
+        }
+
+        auto &analog = get_analogs().at(player == 1 ? Analogs::P1_LEFT_RIGHT : Analogs::P2_LEFT_RIGHT);
+        get_analog_xy_axis(analog, left, right);
+    }
+
+    void get_analog_y_axis(int player, bool &up, bool &down) {
+        if (player != 1 && player != 2) {
+            log_fatal("ddr", "invalid player number: {}, expected 1 or 2", player);
+            return;
+        }
+
+        auto &analog = get_analogs().at(player == 1 ? Analogs::P1_UP_DOWN : Analogs::P2_UP_DOWN);
+        get_analog_xy_axis(analog, up, down);
+    }
 }

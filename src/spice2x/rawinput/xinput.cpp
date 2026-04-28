@@ -153,7 +153,7 @@ XInputSetState(
     float XInputManager::get_analog_state(uint8_t player, XInputAnalogEnum analog) {
         return 0.5f;
     }
-    bool XInputManager::is_button_pressed(uint8_t player, XInputButtonEnum button) {
+    bool XInputManager::is_button_pressed(uint8_t player, XInputButtonEnum button, XINPUT_GAMEPAD_STATE_NORMALIZED *state_in) {
         return false;
     }
     bool XInputManager::get_any_button_pressed(XINPUT_NEW_BUTTON &button) {
@@ -289,59 +289,66 @@ XInputSetState(
         }
     }
 
-    bool XInputManager::is_button_pressed(uint8_t player, XInputButtonEnum button) {
-        XINPUT_GAMEPAD_STATE_NORMALIZED state;
+    bool XInputManager::is_button_pressed(uint8_t player, XInputButtonEnum button, XINPUT_GAMEPAD_STATE_NORMALIZED *state_in) {
+        XINPUT_GAMEPAD_STATE_NORMALIZED state_on_stack;
+        XINPUT_GAMEPAD_STATE_NORMALIZED *state;
     
-        get_state(player, state);
+        if (state_in) {
+            state = state_in;
+        } else {
+            state = &state_on_stack;
+            get_state(player, *state);
+        }
+
         switch (button) {
             case XInputButtonEnum::DPAD_UP:
-                return (state.wButtons & XINPUT_GAMEPAD_DPAD_UP) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_DPAD_UP) != 0;
             case XInputButtonEnum::DPAD_DOWN:
-                return (state.wButtons & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
             case XInputButtonEnum::DPAD_LEFT:
-                return (state.wButtons & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
             case XInputButtonEnum::DPAD_RIGHT:
-                return (state.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
             case XInputButtonEnum::START:
-                return (state.wButtons & XINPUT_GAMEPAD_START) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_START) != 0;
             case XInputButtonEnum::BACK:
-                return (state.wButtons & XINPUT_GAMEPAD_BACK) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_BACK) != 0;
             case XInputButtonEnum::LEFT_STICK:
-                return (state.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0;
             case XInputButtonEnum::RIGHT_STICK:
-                return (state.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0;
             case XInputButtonEnum::LEFT_SHOULDER:
-                return (state.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
             case XInputButtonEnum::RIGHT_SHOULDER:
-                return (state.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
             case XInputButtonEnum::BUTTON_A:
-                return (state.wButtons & XINPUT_GAMEPAD_A) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_A) != 0;
             case XInputButtonEnum::BUTTON_B:
-                return (state.wButtons & XINPUT_GAMEPAD_B) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_B) != 0;
             case XInputButtonEnum::BUTTON_X:
-                return (state.wButtons & XINPUT_GAMEPAD_X) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_X) != 0;
             case XInputButtonEnum::BUTTON_Y:
-                return (state.wButtons & XINPUT_GAMEPAD_Y) != 0;
+                return (state->wButtons & XINPUT_GAMEPAD_Y) != 0;
             case XInputButtonEnum::LEFT_TRIGGER:
-                return state.bLeftTrigger >= XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
+                return state->bLeftTrigger >= XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
             case XInputButtonEnum::RIGHT_TRIGGER:
-                return state.bRightTrigger >= XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
+                return state->bRightTrigger >= XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
             case XInputButtonEnum::LEFT_STICK_UP:
-                return state.sThumbLY > 0.6f;
+                return state->sThumbLY > 0.6f;
             case XInputButtonEnum::LEFT_STICK_DOWN:
-                return state.sThumbLY < 0.4f;
+                return state->sThumbLY < 0.4f;
             case XInputButtonEnum::LEFT_STICK_LEFT:
-                return state.sThumbLX < 0.4f;
+                return state->sThumbLX < 0.4f;
             case XInputButtonEnum::LEFT_STICK_RIGHT:
-                return state.sThumbLX > 0.6f;
+                return state->sThumbLX > 0.6f;
             case XInputButtonEnum::RIGHT_STICK_UP:
-                return state.sThumbRY > 0.6f;
+                return state->sThumbRY > 0.6f;
             case XInputButtonEnum::RIGHT_STICK_DOWN:
-                return state.sThumbRY < 0.4f;
+                return state->sThumbRY < 0.4f;
             case XInputButtonEnum::RIGHT_STICK_LEFT:
-                return state.sThumbRX < 0.4f;
+                return state->sThumbRX < 0.4f;
             case XInputButtonEnum::RIGHT_STICK_RIGHT:
-                return state.sThumbRX > 0.6f;
+                return state->sThumbRX > 0.6f;
             default:
                 break;
         }
@@ -374,11 +381,49 @@ XInputSetState(
     }
 
     bool XInputManager::get_any_button_pressed(XINPUT_NEW_BUTTON &button) {
+
+        constexpr std::array<XInputButtonEnum, static_cast<size_t>(XInputButtonEnum::COUNT)> button_priority = {
+            // the ordering here is important; we want to check buttons first, then dpad, then analog
+            // this is to help with cases like DDR pads that output multiple at the same time for arrows
+
+            // actual buttons
+            XInputButtonEnum::BUTTON_A,
+            XInputButtonEnum::BUTTON_B,
+            XInputButtonEnum::BUTTON_X,
+            XInputButtonEnum::BUTTON_Y,
+            XInputButtonEnum::START,
+            XInputButtonEnum::BACK,
+            XInputButtonEnum::LEFT_STICK,
+            XInputButtonEnum::RIGHT_STICK,
+            XInputButtonEnum::LEFT_SHOULDER,
+            XInputButtonEnum::RIGHT_SHOULDER,
+
+            // dpad
+            XInputButtonEnum::DPAD_UP,
+            XInputButtonEnum::DPAD_DOWN,
+            XInputButtonEnum::DPAD_LEFT,
+            XInputButtonEnum::DPAD_RIGHT,
+
+            // analog values that can be used as buttons
+            XInputButtonEnum::LEFT_TRIGGER,
+            XInputButtonEnum::RIGHT_TRIGGER,
+            XInputButtonEnum::LEFT_STICK_UP,
+            XInputButtonEnum::LEFT_STICK_DOWN,
+            XInputButtonEnum::LEFT_STICK_LEFT,
+            XInputButtonEnum::LEFT_STICK_RIGHT,
+            XInputButtonEnum::RIGHT_STICK_UP,
+            XInputButtonEnum::RIGHT_STICK_DOWN,
+            XInputButtonEnum::RIGHT_STICK_LEFT,
+            XInputButtonEnum::RIGHT_STICK_RIGHT,
+        };
+
         for (uint8_t player = 0; player < XUSER_MAX_COUNT; player++) {
+            XINPUT_GAMEPAD_STATE_NORMALIZED state;
+            get_state(player, state);
             for (uint16_t b = 0; b < static_cast<uint16_t>(XInputButtonEnum::COUNT); b++) {
-                if (is_button_pressed(player, static_cast<XInputButtonEnum>(b))) {
+                if (is_button_pressed(player, button_priority[b], &state)) {
                     button.player = player;
-                    button.button = static_cast<XInputButtonEnum>(b);
+                    button.button = button_priority[b];
                     return true;
                 }
             }

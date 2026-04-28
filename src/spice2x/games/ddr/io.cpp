@@ -35,6 +35,49 @@ std::vector<Button> &games::ddr::get_buttons() {
     return analogs;
 }
 
+
+std::string games::ddr::get_buttons_help() {
+    // keep to max 100 characters wide
+    return
+        "For DDR pad arrows, double check that simultaneous Left+Right and Up+Down can be detected.\n"
+        "You should boot the game, enter test menu, and use Foot Panel Check.\n\n"
+        "When mapping arrows, try the following in order:\n\n"
+        "  1. If your controller uses face buttons (A/B/X/Y), bind them here.\n"
+        "  2. If your controller supports XInput, use that.\n"
+        "  3. If your controller uses analog axis for arrows, try Analogs tab.\n"
+        "  4. Otherwise, you will need to use remapping software or get a better adapter."
+        ;
+}
+
+std::vector<Analog> &games::ddr::get_analogs() {
+    static std::vector<Analog> analogs;
+
+    if (analogs.empty()) {
+        analogs = GameAPI::Analogs::getAnalogs("Dance Dance Revolution");
+
+        GameAPI::Analogs::sortAnalogs(
+                &analogs,
+                "P1 Left-Right (Axis Fix)",
+                "P1 Up-Down (Axis Fix)",
+                "P2 Left-Right (Axis Fix)",
+                "P2 Up-Down (Axis Fix)"
+        );
+    }
+    return analogs;
+}
+
+std::string games::ddr::get_analogs_help() {
+    // keep to max 100 characters wide
+    return
+        "Only use this if your DDR pad outputs analog axis for arrows.\n\n"
+        "If the pad uses face buttons (A/B/X/Y), use Buttons tab instead.\n\n"
+        "Spice will treat values <=25% as Left, >=75% as Right, ~=50% as neutral,\n"
+        "and value between 50% and 75% as both arrows.\n\n"
+        "This is the classic Stepmania \"Axis Fix\" which may or may not work with\n"
+        "your dance pad or your adapter."
+        ;
+}
+
 std::vector<Light> &games::ddr::get_lights() {
     static std::vector<Light> lights;
 
