@@ -59,6 +59,11 @@ static CaptureData GRAPHICS_CAPTURE_BUFFER[GRAPHICS_CAPTURE_SCREEN_NO] {};
 static std::mutex GRAPHICS_CAPTURE_BUFFER_M[GRAPHICS_CAPTURE_SCREEN_NO] {};
 static std::condition_variable GRAPHICS_CAPTURE_CV[GRAPHICS_CAPTURE_SCREEN_NO] {};
 
+static std::optional<graphics_orientation> target_orientation_on_boot;
+static UINT target_refresh_rate_on_boot = 0;
+static bool monitor_settings_changed = false;
+static bool monitor_layout_needs_reset = false;
+
 // flag settings
 bool GRAPHICS_CAPTURE_CURSOR = false;
 bool GRAPHICS_LOG_HRESULT = false;
@@ -104,6 +109,7 @@ static decltype(SetWindowLongA) *SetWindowLongA_orig = nullptr;
 static decltype(SetWindowLongW) *SetWindowLongW_orig = nullptr;
 static decltype(SetWindowPos) *SetWindowPos_orig = nullptr;
 static decltype(ShowWindow) *ShowWindow_orig = nullptr;
+static decltype(SetDisplayConfig) *SetDisplayConfig_addr = nullptr;
 
 static void reset_window_hook(HWND hWnd) {
     overlay::destroy(hWnd);
@@ -232,7 +238,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 
     switch (uMsg) {
         case WM_MOVE:
-        case WM_SIZE: {
+        case WM_SIZE:
             // Update SPICETOUCH space when the main window changes size or moves.
             // The update happens regardless of whether the "fake" spicetouch window is present or not.
             // This allows touches received on subscreen window to be translated correctly.
@@ -249,7 +255,16 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
                     SPICETOUCH_TOUCH_WIDTH, SPICETOUCH_TOUCH_HEIGHT,
                     SWP_NOZORDER | SWP_NOREDRAW | SWP_NOREPOSITION | SWP_NOACTIVATE);
             }
-        }
+            break;
+        case WM_ACTIVATEAPP:
+            if (wParam) {
+                // regained focus
+                // this *can* get called twice in a row when restoring, but update_monitor_at_runtime
+                // is idempotent (checks current display settings to see if changes are needed),
+                // so it shouldn't cause any issues
+                update_monitor_at_runtime();
+            }
+            break;
         default:
             break;
     }
@@ -1142,7 +1157,7 @@ void change_primary_monitor(const std::string &monitor_name) {
     const auto DisplayConfigGetDeviceInfo_addr =
         reinterpret_cast<decltype(DisplayConfigGetDeviceInfo) *>(
             GetProcAddress(user32, "DisplayConfigGetDeviceInfo"));
-    const auto SetDisplayConfig_addr =
+    SetDisplayConfig_addr =
         reinterpret_cast<decltype(SetDisplayConfig) *>(
             GetProcAddress(user32, "SetDisplayConfig"));
     if (GetDisplayConfigBufferSizes_addr == nullptr || QueryDisplayConfig_addr == nullptr ||
@@ -1257,11 +1272,13 @@ void change_primary_monitor(const std::string &monitor_name) {
         log_fatal("graphics", "SetDisplayConfig failed, check -mainmonitor option: {}", status);
     }
 
+    monitor_layout_needs_reset = true;
+
     // a little extra time for windows to settle and redraw things
     Sleep(2000);
 }
 
-void update_monitor_on_boot(std::optional<graphics_orientation> target_orientation, UINT target_refresh_rate) {
+void update_monitor(bool is_boot, std::optional<graphics_orientation> target_orientation, UINT target_refresh_rate) {
     // note: all of this is only being done for the primary motnior
 
     // get current settings
@@ -1330,7 +1347,7 @@ void update_monitor_on_boot(std::optional<graphics_orientation> target_orientati
     }
 
     // update refresh rate
-    if (target_refresh_rate > 0) {
+    if (target_refresh_rate > 0 && target_refresh_rate != dm.dmDisplayFrequency) {
         log_misc("graphics",
             "current refresh rate {} => desired refresh rate {}",
             dm.dmDisplayFrequency, target_refresh_rate);
@@ -1342,25 +1359,76 @@ void update_monitor_on_boot(std::optional<graphics_orientation> target_orientati
 
     if (!needs_update) {
         // nothing to do
+        log_misc("graphics", "display settings are already up to date, no changes needed");
         return;
     }
 
     const auto result = ChangeDisplaySettings(&dm, CDS_FULLSCREEN);
     if (result != DISP_CHANGE_SUCCESSFUL) {
-        log_fatal(
-            "graphics",
-            "failed to update display settings ({}px x {}px @ {}Hz): error {}, double check options",
-            dm.dmPelsWidth,
-            dm.dmPelsHeight,
-            dm.dmDisplayFrequency,
-            result);
+        if (is_boot) {
+            log_fatal(
+                "graphics",
+                "failed to update display settings ({}px x {}px @ {}Hz): error {}, double check options",
+                dm.dmPelsWidth,
+                dm.dmPelsHeight,
+                dm.dmDisplayFrequency,
+                result);
+        } else {
+            log_warning(
+                "graphics",
+                "failed to update display settings ({}px x {}px @ {}Hz): error {}, double check options",
+                dm.dmPelsWidth,
+                dm.dmPelsHeight,
+                dm.dmDisplayFrequency,
+                result);
+        }
     } else {
+        monitor_settings_changed = true;
+        // sleep for a little bit after changing monitor settings to delay game launch/resume
+        Sleep(1000);
         log_info("graphics", "display settings updated successfully ({}px x {}px @ {}Hz)",
             dm.dmPelsWidth,
             dm.dmPelsHeight,
             dm.dmDisplayFrequency);
     }
+}
 
-    // sleep for a little bit after changing monitor settings to delay game launch
-    Sleep(1000);
+void update_monitor_on_boot(std::optional<graphics_orientation> target_orientation, UINT target_refresh_rate) {
+    target_orientation_on_boot = target_orientation;
+    target_refresh_rate_on_boot = target_refresh_rate;
+    log_misc("graphics", "applying monitor updates at boot...");
+    update_monitor(true, target_orientation, target_refresh_rate);
+}
+
+void update_monitor_at_runtime() {
+    if (monitor_settings_changed) {
+        log_misc("graphics", "applying monitor updates at runtime as window regained focus...");
+        update_monitor(false, target_orientation_on_boot, target_refresh_rate_on_boot);   
+    }
+}
+
+void reset_monitor_on_exit() {
+
+    // while CDS_FULLSCREEN is *supposed* to be temporary & the OS attempts to
+    // restore the original settings on exit, it can sometimes fail to do that;
+    // therefore, we try our best to clean things up on the way out
+    if (monitor_settings_changed) {
+        monitor_settings_changed = false;
+        log_misc("graphics", "resetting monitor settings on exit...");
+        ChangeDisplaySettingsW(nullptr, 0);
+    }
+
+    // same for this one.
+    if (monitor_layout_needs_reset) {
+        monitor_layout_needs_reset = false;
+        log_misc("graphics", "restoring primary monitor on exit...");
+        if (SetDisplayConfig_addr != nullptr) {
+            SetDisplayConfig_addr(
+                0,
+                nullptr,
+                0,
+                nullptr,
+                SDC_APPLY | SDC_USE_DATABASE_CURRENT);
+        }
+    }
 }
