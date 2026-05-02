@@ -657,9 +657,9 @@ static const std::vector<OptionDefinition> OPTION_DEFINITIONS = {
     },
     {
         // IIDXTTDelayP1
-        .title = "IIDX TT Delay Frames (Player 1)",
+        .title = "IIDX TT Delay Window (Player 1)",
         .name = "iidxttdelayp1",
-        .desc = "Delays turntable input by number of poll frames. Heavily dependent on what I/O emulation is in use! "
+        .desc = "Delays turntable by number of input polls. Duration is heavily dependent on what I/O emulation is in use. "
             "As usual, changing any option requires a restart. Default: 0 (no delay).",
         .type = OptionType::Integer,
         .game_name = "Beatmania IIDX",
@@ -667,9 +667,9 @@ static const std::vector<OptionDefinition> OPTION_DEFINITIONS = {
     },
     {
         // IIDXTTDelayP2
-        .title = "IIDX TT Delay Frames (Player 2)",
+        .title = "IIDX TT Delay Window (Player 2)",
         .name = "iidxttdelayp2",
-        .desc = "Delays turntable input by number of poll frames. Heavily dependent on what I/O emulation is in use! "
+        .desc = "Delays turntable by number of input polls. Duration is heavily dependent on what I/O emulation is in use. "
             "As usual, changing any option requires a restart. Default: 0 (no delay).",
         .type = OptionType::Integer,
         .game_name = "Beatmania IIDX",
