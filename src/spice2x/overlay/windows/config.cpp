@@ -2506,31 +2506,45 @@ namespace overlay::windows {
                     const bool value_changed =
                         ImGui::SliderFloat("Sensitivity", &sensitivity, 0.f, 2.f, "%.3f");
                     ImGui::SameLine();
-                    ImGui::HelpMarker(
-                        "Adjust floating point multiplier to relative movement.\n\n"
-                        "Value is squared before being multiplied (e.g., 1.44 is 2x sensitivity, 2.00 is 4x).\n\n"
-                        "Dependent on how often the game polls for input. Intended for angular input (knobs, turntables)");
+                    if (device->type == rawinput::HID && analog.getType() != GameAPI::Analogs::AnalogType::Circular) {
+                        ImGui::HelpMarker(
+                            "Adjust the analog sensitivity curve; "
+                            "values <1.0 are less sensitive around neutral, "
+                            "values >1.0 are more sensitive.");
+                    } else {
+                        ImGui::HelpMarker(
+                            "Adjust floating point multiplier to relative movement.\n\n"
+                            "Value is squared before being multiplied (e.g., 1.44 is 2x sensitivity, 2.00 is 4x).");
+                    }
                     if (value_changed) {
                         analog.setSensitivity(sensitivity * sensitivity);
                     }
                 }
-                if (device->type == rawinput::HID || device->type == rawinput::MIDI) {
+
+                // hide deadzone for circular analog since it doesn't make any sense (unless in relative mode)
+                if ((device->type == rawinput::HID || device->type == rawinput::MIDI) &&
+                    ((analog.getType() != GameAPI::Analogs::AnalogType::Circular) || analog.isRelativeMode())) {
                     auto deadzone = analog.getDeadzone();
+
+                    // for back compat (before each analog had a type)
+                    if (deadzone < 0.f) {
+                        deadzone = -deadzone;
+                        analog.setDeadzone(deadzone);
+                    }
+                   
                     const bool value_changed =
-                        ImGui::SliderFloat("Deadzone", &deadzone, -0.999f, 0.999f, "%.3f");
+                        ImGui::SliderFloat("Deadzone", &deadzone, 0.f, 0.999f, "%.3f");
                     if (value_changed) {
                         analog.setDeadzone(deadzone);
                     }
                     ImGui::SameLine();
-                    ImGui::HelpMarker("Positive values specify a deadzone around the middle.\n"
-                                    "Negative values specify a deadzone from the minimum value.");
+                    ImGui::HelpMarker("Specify the deadzone that gets applied to at-rest (neutral) value.");
 
                     // deadzone mirror
                     bool deadzone_mirror = analog.getDeadzoneMirror();
                     ImGui::Checkbox("Deadzone Mirror", &deadzone_mirror);
                     ImGui::SameLine();
-                    ImGui::HelpMarker("Positive deadzone values cut off at edges instead.\n"
-                                    "Negative deadzone values cut off at maximum value instead.");
+                    ImGui::HelpMarker("Apply deadzone to extreme value(s) instead of neutral.");
                     if (deadzone_mirror != analog.getDeadzoneMirror()) {
                         analog.setDeadzoneMirror(deadzone_mirror);
                     }
@@ -2549,23 +2563,26 @@ namespace overlay::windows {
             if (this->analogs_devices_selected >= 0) {
                 const auto device = this->analogs_devices.at(this->analogs_devices_selected);
                 if (device->type == rawinput::HID) {
-                    // smoothing
-                    bool smoothing = analog.getSmoothing();
-                    ImGui::BeginDisabled(analog.isRelativeMode());
-                    ImGui::Checkbox("Smooth Axis (adds latency)", &smoothing);
-                    ImGui::SameLine();
-                    ImGui::HelpMarker(
-                        "Apply a moving average algorithm; intended for angular input (knobs, turntables). "
-                        "Adds a slight bit of latency to input as the algorithm averages out recent input. "
-                        "Only use in dire situations where the input is too jittery for the game.");
-                    ImGui::EndDisabled();
-                    if (smoothing != analog.getSmoothing()) {
-                        analog.setSmoothing(smoothing);
+
+                    if (analog.getType() == GameAPI::Analogs::AnalogType::Circular) {
+                        // smoothing
+                        bool smoothing = analog.getSmoothing();
+                        ImGui::BeginDisabled(analog.isRelativeMode());
+                        ImGui::Checkbox("Smooth Axis (adds latency)", &smoothing);
+                        ImGui::SameLine();
+                        ImGui::HelpMarker(
+                            "Apply a moving average algorithm; intended for angular input (knobs, turntables). "
+                            "Adds a slight bit of latency to input as the algorithm averages out recent input. "
+                            "Only use in dire situations where the input is too jittery for the game.");
+                        ImGui::EndDisabled();
+                        if (smoothing != analog.getSmoothing()) {
+                            analog.setSmoothing(smoothing);
+                        }
                     }
 
                     // relative input mode
                     bool relative_analog = analog.isRelativeMode();
-                    ImGui::Checkbox("Relative Axis (experimental)", &relative_analog);
+                    ImGui::Checkbox("Relative Axis", &relative_analog);
                     ImGui::SameLine();
                     ImGui::HelpMarker(
                         "Use relative directional input instead of positional values.\n\n"
@@ -2579,8 +2596,7 @@ namespace overlay::windows {
 
                     // delay buffer
                     int delay = analog.getDelayBufferDepth();
-                    ImGui::InputInt("Delay (experimental)", &delay, 1, 10);
-                    if (ImGui::IsItemDeactivatedAfterEdit()) {
+                    if (ImGui::InputInt("Delay", &delay, 1, 10)) {
                         delay = CLAMP(delay, 0, 256);
                         analog.setDelayBufferDepth(delay);
                     }
@@ -2600,10 +2616,12 @@ namespace overlay::windows {
             ImGui::ProgressBar(value);
 
             // centered knob preview
-            const float knob_size = 64.f;
-            auto width = ImGui::GetContentRegionAvail().x - knob_size;
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width / 2));
-            ImGui::Knob(value, knob_size);
+            if (analog.getType() == GameAPI::Analogs::AnalogType::Circular) {
+                const float knob_size = 64.f;
+                auto width = ImGui::GetContentRegionAvail().x - knob_size;
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width / 2));
+                ImGui::Knob(value, knob_size);
+            }
 
             // update analog
             if (analogs_devices_selected >= 0 && analogs_devices_selected < (int) analogs_devices.size()) {

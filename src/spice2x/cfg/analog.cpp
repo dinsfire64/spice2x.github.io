@@ -207,22 +207,38 @@ float Analog::applyMultiplier(float value) {
 }
 
 float Analog::normalizeAnalogValue(float value) {
-    // effectively the same as fmodf(value, 1.f)
-    // for small values, this is MUCH faster than fmodf.
-    float new_value = value;
-    while (new_value > 1.f) {
-        new_value -= 1.f;
+    if (getType() == GameAPI::Analogs::AnalogType::Circular) {
+        // effectively the same as fmodf(value, 1.f)
+        // for small values, this is MUCH faster than fmodf.
+        float new_value = value;
+        while (new_value > 1.f) {
+            new_value -= 1.f;
+        }
+        while (new_value < 0.f) {
+            new_value += 1.f;
+        }
+        return new_value;
+
+    } else {
+        // clamp to [0, 1] range
+        return std::clamp(value, 0.f, 1.f);
     }
-    while (new_value < 0.f) {
-        new_value += 1.f;
-    }
-    return new_value;
 }
 
 float Analog::applyDeadzone(float raw_value) {
     float value = raw_value;
-    const auto deadzone = this->getDeadzone();
-    if (deadzone > 0) {
+    auto deadzone = this->getDeadzone();
+
+    // in the past, positive deadzone applied in the center, negative deadzone applied to 0
+    // after each analog value received a type (circular/linear) this has been simpliifed to
+    // positive values only since we can figure out where the rest value is
+    // for back compat, treat negative value as positive
+    if (deadzone < 0.f) {
+        deadzone = -deadzone;
+    }
+
+    // relative mode assumes that user is using a stick, so center is neutral regardless of analog type
+    if (getType() != GameAPI::Analogs::AnalogType::LinearPositive || isRelativeMode()) {
 
         // calculate values
         const auto delta = value - 0.5f;
@@ -255,7 +271,7 @@ float Analog::applyDeadzone(float raw_value) {
             }
         }
 
-    } else if (deadzone < 0) {
+    } else {
 
         // invert for mirror
         if (this->getDeadzoneMirror()) {
@@ -263,8 +279,8 @@ float Analog::applyDeadzone(float raw_value) {
         }
 
         // deadzone from minimum value
-        if (deadzone > -1 && value > -deadzone) {
-            value = std::min(1.f, (value + deadzone) / (1.f + deadzone));
+        if (deadzone < 1.f && deadzone < value) {
+            value = std::max(0.f, (value - deadzone) / (1.f - deadzone));
         } else {
             value = 0.f;
         }

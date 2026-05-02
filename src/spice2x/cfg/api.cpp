@@ -679,7 +679,9 @@ float GameAPI::Analogs::getState(rawinput::RawInputManager *manager, rawinput::D
             }
 
             // deadzone
-            if (analog.isDeadzoneSet()) {
+            // do not apply deadzone to circular analogs since it doesn't make sense (except in relative mode)
+            if (analog.isDeadzoneSet() &&
+                (analog.getType() != AnalogType::Circular || analog.isRelativeMode())) {
                 value = analog.applyDeadzone(value);
             }
 
@@ -704,7 +706,7 @@ float GameAPI::Analogs::getState(rawinput::RawInputManager *manager, rawinput::D
                 // translate relative movement to absolute value
                 value = analog.getAbsoluteValue(relative_delta);
 
-            } else {
+            } else if (analog.getType() == AnalogType::Circular) {
                 // integer multiplier
                 value = analog.applyMultiplier(value);
 
@@ -731,6 +733,53 @@ float GameAPI::Analogs::getState(rawinput::RawInputManager *manager, rawinput::D
 
                     // apply to value
                     value = rads * (float) M_1_TAU;
+                }
+            } else {
+                // sensitivity
+                if (analog.isSensitivitySet()) {
+                    // adjust curve
+                    // values < 1.f : less sensitive around neutral
+                    // values > 1.f : more sensitive around neutral
+                    float curve = analog.getSensitivity();
+                    if (curve <= 0.f) {
+                        curve = 0.01f;
+                    }
+                    curve = 1.f / curve;
+
+                    if (analog.getType() == AnalogType::LinearCentered) {
+                        // convert 0.0..1.0 to -1.0..+1.0
+                        float signed_raw = (value - 0.5f) * 2.0f;
+                        // apply curve
+                        float sign = signed_raw < 0.0f ? -1.0f : 1.0f;
+                        float magnitude = fabsf(signed_raw);
+                        float curved = sign * powf(magnitude, curve);
+                        // convert back to 0.0..1.0
+                        value = curved * 0.5f + 0.5f;
+                    } else {
+                        value = powf(value, curve);
+                    }
+
+                    value = std::clamp(value, 0.f, 1.f);
+                }
+
+                // multiplier / divisor
+                if (analog.getMultiplier() < -1) {
+                    if (analog.getType() == AnalogType::LinearCentered) {
+                        value = (value - 0.5f) / (-analog.getMultiplier()) + 0.5f;
+                    } else {
+                        value /= -analog.getMultiplier();
+                    }
+
+                    value = std::clamp(value, 0.f, 1.f);
+
+                } else if (analog.getMultiplier() > 1) {
+                    if (analog.getType() == AnalogType::LinearCentered) {
+                        value = (value - 0.5f) * analog.getMultiplier() + 0.5f;
+                    } else {
+                        value *= analog.getMultiplier();
+                    }
+
+                    value = std::clamp(value, 0.f, 1.f);
                 }
             }
 
@@ -837,6 +886,42 @@ std::vector<Analog> GameAPI::Analogs::sortAnalogs(
     }
 
     return sorted;
+}
+
+static std::vector<Analog> sortAnalogsWithTypeInternal(
+    std::vector<Analog> &analogs,
+    const std::initializer_list<GameAPI::Analogs::AnalogWithType> list) {
+
+    std::vector<Analog> sorted;
+
+    bool analog_found;
+    for (auto &a : list) {
+        analog_found = false;
+
+        for (auto &analog : analogs) {
+            if (a.name == analog.getName()) {
+                analog_found = true;
+                analog.setType(a.type);
+                sorted.push_back(analog);
+                break;
+            }
+        }
+
+        if (!analog_found) {
+            sorted.emplace_back(a.name, a.type);
+        }
+    }
+
+    return sorted;
+}
+
+void GameAPI::Analogs::sortAnalogsWithType(
+    std::vector<Analog> *analogs,
+    const std::initializer_list<AnalogWithType> list) {
+
+    if (analogs) {
+        *analogs = sortAnalogsWithTypeInternal(*analogs, list);
+    }
 }
 
 float GameAPI::Analogs::getState(rawinput::RawInputManager *manager, Analog &analog) {
